@@ -2,7 +2,9 @@
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { PurchaseBillService } from '../../core/services/purchase-bill.service';
+import { AuthService } from '../../core/services/auth.service';
 import { Location, PurchaseBillTableRow } from '../../core/models/purchase-bill.models';
 
 const ALLOWED_ITEMS = ['Mango', 'Apple', 'Banana', 'Orange', 'Grapes', 'Kiwi', 'Strawberry'];
@@ -32,10 +34,21 @@ export class PurchaseBillComponent implements OnInit {
   tableRows: PurchaseBillTableRow[] = [];
   allowedItems = ALLOWED_ITEMS;
   
+  // Custom Autocomplete State
+  showItemDropdown = false;
+  filteredItems: string[] = [];
+  
   localTotalCost = 0;
   localTotalSelling = 0;
 
-  constructor(private fb: FormBuilder, private purchaseBillService: PurchaseBillService) {
+  private readonly STORAGE_KEY = 'billflow_purchase_bill_rows';
+
+  constructor(
+    private fb: FormBuilder, 
+    private purchaseBillService: PurchaseBillService,
+    private authService: AuthService,
+    private router: Router
+  ) {
     this.billForm = this.fb.group({
       item: ['', [Validators.required, allowedItemValidator]],
       locationCode: ['', [Validators.required]],
@@ -48,6 +61,7 @@ export class PurchaseBillComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLocations();
+    this.restorePersistedRows();
     
     // Subscribe to form changes to update read-only totals locally
     this.billForm.valueChanges.subscribe(val => {
@@ -66,6 +80,35 @@ export class PurchaseBillComponent implements OnInit {
         this.locationsError = 'Failed to load batch locations. Please refresh.';
       }
     });
+  }
+
+  restorePersistedRows(): void {
+    const saved = localStorage.getItem(this.STORAGE_KEY);
+    if (saved) {
+      try {
+        this.tableRows = JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved bill rows');
+      }
+    }
+  }
+
+  filterItems(): void {
+    const val = this.billForm.get('item')?.value?.toLowerCase() || '';
+    this.filteredItems = this.allowedItems.filter(i => i.toLowerCase().includes(val));
+  }
+
+  selectItem(option: string): void {
+    this.billForm.patchValue({ item: option });
+    this.billForm.get('item')?.markAsTouched();
+    this.showItemDropdown = false;
+  }
+
+  hideItemDropdown(): void {
+    // Delay hiding to allow the click event on a suggestion to process
+    setTimeout(() => {
+      this.showItemDropdown = false;
+    }, 200);
   }
 
   calculateLocalTotals(val: any): void {
@@ -112,16 +155,14 @@ export class PurchaseBillComponent implements OnInit {
       next: (response) => {
         this.isAdding = false;
         
-        // Find location name for table display
         const locationName = this.locations.find(l => l.locationCode === response.locationCode)?.locationName || response.locationCode;
         
-        // Push the backend-calculated exact values to the table
         this.tableRows.push({ ...response, locationName });
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.tableRows));
         
-        // Sensible form reset: clear text/numbers, keep discount at 0, reset untouched state
         this.billForm.reset({
           item: '',
-          locationCode: request.locationCode, // Usually helpful to keep same batch selected
+          locationCode: request.locationCode, 
           standardCost: null,
           standardPrice: null,
           quantity: null,
@@ -136,6 +177,18 @@ export class PurchaseBillComponent implements OnInit {
           this.backendError = err.error?.message || 'An unexpected error occurred while adding the item.';
         }
       }
+    });
+  }
+
+  onClearItems(): void {
+    this.tableRows = [];
+    localStorage.removeItem(this.STORAGE_KEY);
+  }
+
+  onLogout(): void {
+    this.authService.logout().subscribe({
+      next: () => this.router.navigate(['/login']),
+      error: () => this.router.navigate(['/login'])
     });
   }
 }
