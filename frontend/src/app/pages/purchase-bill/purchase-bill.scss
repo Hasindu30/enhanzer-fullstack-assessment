@@ -1,4 +1,4 @@
-﻿.pb-wrapper {
+.pb-wrapper {
   min-height: 100vh;
   padding: 2rem 1rem;
   background: #f0f2f5;
@@ -7,6 +7,16 @@
 .pb-header {
   max-width: 1200px;
   margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+
+  .brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #4b5563;
+  }
+
   h1 {
     font-size: 1.8rem;
     color: #1a237e;
