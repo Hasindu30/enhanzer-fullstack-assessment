@@ -1,6 +1,8 @@
-﻿using backend.DTOs;
+using backend.DTOs;
 using backend.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace backend.Controllers;
 
@@ -9,10 +11,12 @@ namespace backend.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly TokenService _tokenService;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, TokenService tokenService)
     {
         _authService = authService;
+        _tokenService = tokenService;
     }
 
     [HttpPost("login")]
@@ -25,6 +29,16 @@ public class AuthController : ControllerBase
             if (!result.Success)
                 return Unauthorized(result);
 
+            var token = _tokenService.CreateToken(request.Email);
+
+            Response.Cookies.Append("auth_token", token, new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.None,
+                Secure = true,
+                Expires = DateTimeOffset.UtcNow.AddHours(1)
+            });
+
             return Ok(result);
         }
         catch (ApplicationException ex)
@@ -36,4 +50,24 @@ public class AuthController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An unexpected error occurred." });
         }
     }
+
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult Me()
+    {
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        return Ok(new { email });
+    }
+
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        Response.Cookies.Delete("auth_token", new CookieOptions
+        {
+            SameSite = SameSiteMode.None,
+            Secure = true
+        });
+        return Ok(new { message = "Logged out." });
+    }
 }
+
