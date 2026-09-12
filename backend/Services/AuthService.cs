@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using backend.Data;
 using backend.DTOs;
@@ -80,7 +80,7 @@ public class AuthService : IAuthService
             throw new ApplicationException("Unexpected response from authentication service.", ex);
         }
 
-        if (loginResponse == null || loginResponse.Status != "Success")
+        if (loginResponse == null || loginResponse.StatusCode != 200 || loginResponse.ResponseBody == null || loginResponse.ResponseBody.Count == 0)
         {
             return new LoginResponseDto
             {
@@ -89,7 +89,22 @@ public class AuthService : IAuthService
             };
         }
 
-        await SaveLocationsAsync(loginResponse.UserLocations);
+        var responseData = loginResponse.ResponseBody[0];
+
+        // The external API returns Doc_Msg: "Invalid Login Details" for failed logins,
+        // and presumably "Success" (or a different non-error message) for valid ones.
+        // To avoid guessing the exact success string, we check if it indicates invalid details,
+        // or we can rely on the presence of UserLocations as the assignment suggests saving them on success.
+        if (responseData.DocMsg.Contains("Invalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return new LoginResponseDto
+            {
+                Success = false,
+                Message = responseData.DocMsg
+            };
+        }
+
+        await SaveLocationsAsync(responseData.UserLocations ?? new List<UserLocationDto>());
 
         return new LoginResponseDto
         {
