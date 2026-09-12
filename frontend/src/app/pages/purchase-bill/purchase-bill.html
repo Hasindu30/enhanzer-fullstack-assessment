@@ -1,0 +1,176 @@
+﻿<div class="pb-wrapper">
+  <div class="pb-header">
+    <h1>Purchase Bill</h1>
+  </div>
+
+  <div class="pb-card">
+    <form [formGroup]="billForm" (ngSubmit)="onAdd()" novalidate class="pb-form">
+      
+      <!-- Item (Autocomplete) -->
+      <div class="form-group">
+        <label for="item">Item</label>
+        <input 
+          id="item" 
+          list="item-list" 
+          formControlName="item" 
+          placeholder="Type to search..." 
+          autocomplete="off"
+          [class.invalid]="billForm.get('item')?.invalid && billForm.get('item')?.touched"
+        />
+        <datalist id="item-list">
+          <option *ngFor="let option of allowedItems" [value]="option"></option>
+        </datalist>
+        <div class="error-msg" *ngIf="billForm.get('item')?.touched && billForm.get('item')?.hasError('required')">Required</div>
+        <div class="error-msg" *ngIf="billForm.get('item')?.touched && billForm.get('item')?.hasError('invalidItem')">Must select a valid fruit.</div>
+      </div>
+
+      <!-- Batch Dropdown -->
+      <div class="form-group">
+        <label for="locationCode">Batch</label>
+        <select 
+          id="locationCode" 
+          formControlName="locationCode"
+          [class.invalid]="billForm.get('locationCode')?.invalid && billForm.get('locationCode')?.touched"
+        >
+          <option value="" disabled>Select Batch...</option>
+          <option *ngIf="locationsLoading" value="" disabled>Loading batches...</option>
+          <option *ngFor="let loc of locations" [value]="loc.locationCode">{{ loc.locationName }}</option>
+        </select>
+        <div class="error-msg" *ngIf="locationsError">{{ locationsError }}</div>
+        <div class="error-msg" *ngIf="!locationsError && billForm.get('locationCode')?.touched && billForm.get('locationCode')?.hasError('required')">Required</div>
+      </div>
+
+      <!-- Standard Cost -->
+      <div class="form-group">
+        <label for="standardCost">Standard Cost</label>
+        <input 
+          id="standardCost" 
+          type="number" 
+          step="0.01" 
+          formControlName="standardCost" 
+          placeholder="0.00"
+          [class.invalid]="billForm.get('standardCost')?.invalid && billForm.get('standardCost')?.touched"
+        />
+        <div class="error-msg" *ngIf="billForm.get('standardCost')?.touched && billForm.get('standardCost')?.hasError('required')">Required</div>
+        <div class="error-msg" *ngIf="billForm.get('standardCost')?.touched && billForm.get('standardCost')?.hasError('min')">> 0 required</div>
+      </div>
+
+      <!-- Standard Price -->
+      <div class="form-group">
+        <label for="standardPrice">Standard Price</label>
+        <input 
+          id="standardPrice" 
+          type="number" 
+          step="0.01" 
+          formControlName="standardPrice" 
+          placeholder="0.00"
+          [class.invalid]="billForm.get('standardPrice')?.invalid && billForm.get('standardPrice')?.touched"
+        />
+        <div class="error-msg" *ngIf="billForm.get('standardPrice')?.touched && billForm.get('standardPrice')?.hasError('required')">Required</div>
+        <div class="error-msg" *ngIf="billForm.get('standardPrice')?.touched && billForm.get('standardPrice')?.hasError('min')">> 0 required</div>
+      </div>
+
+      <!-- Quantity -->
+      <div class="form-group">
+        <label for="quantity">Quantity</label>
+        <input 
+          id="quantity" 
+          type="number" 
+          formControlName="quantity" 
+          placeholder="0"
+          [class.invalid]="billForm.get('quantity')?.invalid && billForm.get('quantity')?.touched"
+        />
+        <div class="error-msg" *ngIf="billForm.get('quantity')?.touched && billForm.get('quantity')?.hasError('required')">Required</div>
+        <div class="error-msg" *ngIf="billForm.get('quantity')?.touched && billForm.get('quantity')?.hasError('min')">> 0 required</div>
+        <div class="error-msg" *ngIf="billForm.get('quantity')?.touched && billForm.get('quantity')?.hasError('pattern')">Must be integer</div>
+      </div>
+
+      <!-- Discount % -->
+      <div class="form-group">
+        <label for="discountPercentage">Discount %</label>
+        <input 
+          id="discountPercentage" 
+          type="number" 
+          step="0.1" 
+          formControlName="discountPercentage" 
+          placeholder="0"
+          [class.invalid]="billForm.get('discountPercentage')?.invalid && billForm.get('discountPercentage')?.touched"
+        />
+        <div class="error-msg" *ngIf="billForm.get('discountPercentage')?.touched && billForm.get('discountPercentage')?.hasError('required')">Required</div>
+        <div class="error-msg" *ngIf="billForm.get('discountPercentage')?.touched && (billForm.get('discountPercentage')?.hasError('min') || billForm.get('discountPercentage')?.hasError('max'))">Must be 0-100</div>
+      </div>
+
+      <!-- Calculated Totals (Read Only) -->
+      <div class="form-group">
+        <label>Total Cost</label>
+        <input class="readonly-val" [value]="localTotalCost | number:'1.2-2'" readonly tabindex="-1" />
+      </div>
+
+      <div class="form-group">
+        <label>Total Selling</label>
+        <input class="readonly-val" [value]="localTotalSelling | number:'1.2-2'" readonly tabindex="-1" />
+      </div>
+
+      <!-- Action -->
+      <div class="form-group action-group">
+        <button type="submit" class="btn-add" [disabled]="isAdding || locationsLoading">
+          <span *ngIf="!isAdding">Add</span>
+          <span *ngIf="isAdding" class="spinner"></span>
+        </button>
+      </div>
+      
+    </form>
+    
+    <div class="error-banner" *ngIf="backendError">
+      {{ backendError }}
+    </div>
+  </div>
+
+  <!-- Items Table -->
+  <div class="pb-card table-card">
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Batch</th>
+            <th class="text-right">Std. Cost</th>
+            <th class="text-right">Std. Price</th>
+            <th class="text-right">Qty</th>
+            <th class="text-right">Disc %</th>
+            <th class="text-right">Total Cost</th>
+            <th class="text-right">Total Selling</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngIf="tableRows.length === 0">
+            <td colspan="8" class="text-center empty-state">No items added yet.</td>
+          </tr>
+          <tr *ngFor="let row of tableRows">
+            <td>{{ row.item }}</td>
+            <td>{{ row.locationName }}</td>
+            <td class="text-right">{{ row.standardCost | number:'1.2-2' }}</td>
+            <td class="text-right">{{ row.standardPrice | number:'1.2-2' }}</td>
+            <td class="text-right">{{ row.quantity }}</td>
+            <td class="text-right">{{ row.discountPercentage | number:'1.2-2' }}</td>
+            <td class="text-right fw-bold">{{ row.totalCost | number:'1.2-2' }}</td>
+            <td class="text-right fw-bold">{{ row.totalSelling | number:'1.2-2' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Summary -->
+    <div class="summary-section">
+      <div class="summary-box">
+        <span class="label">Total Items:</span>
+        <span class="val">{{ totalItems }}</span>
+      </div>
+      <div class="summary-box">
+        <span class="label">Total Quantity:</span>
+        <span class="val">{{ totalQuantity }}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
